@@ -1,0 +1,134 @@
+{
+  "name": "daily-news-digest",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "009e1055-2cbf-44c1-bc6a-251ad0cd6c9b",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://newsapi.org/v2/top-headlines",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "a8877005a51246e49ee04b817015ba6e"
+            },
+            {
+              "name": "country",
+              "value": "us"
+            },
+            {
+              "name": "category",
+              "value": "general"
+            },
+            {
+              "name": "pagesize",
+              "value": "5"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "4d54ebe9-c1a5-4e81-8e61-b8b578282343",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// input: items from NewsAPI\nlet digest = '';\nfor (const item of items[0].json.articles) {\n    digest += `• ${item.title} (${item.source.name})\\n`;\n}\nreturn [{ json: { digest_text: digest } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "5542ca31-0ffc-46c7-89b2-d49af3a02cc9",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "sendTo": "akshayavarma126@gmail.com",
+        "subject": "Daily News Digest",
+        "message": "={{ $json[\"digest_text\"] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        624,
+        0
+      ],
+      "id": "cc6a660e-a691-412a-9ccb-3bb151883f02",
+      "name": "Send a message",
+      "webhookId": "318564f7-47f1-40ae-8c08-353965c7d963",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "hV8kV5Z3ezVHSKwv",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "45c893c7-4772-4479-8676-0602b5300752",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5abf4596ec62b64bbf9b9742f6dad858e676c65598e84935749dd519d30e589b"
+  },
+  "id": "jlwlLEV7eyKXANC2",
+  "tags": []
+}
