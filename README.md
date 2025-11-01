@@ -19,35 +19,32 @@ It integrates transcript extraction, AI summarization, and Google Docs automatio
 
 ---
 
-## **Process Flow (Detailed)**
+## **High-Level Architecture**
 
-┌──────────────────────────┐
-│  User Inputs YouTube URL │
-└─────────────┬────────────┘
-              │
-   ┌──────────▼───────────┐
-   │ Extract Transcript   │
-   │ (yt-dlp / YouTube)   │
-   │ → Fetch captions     │
-   └──────────┬───────────┘
-              │
-   ┌──────────▼───────────┐
-   │ Summarize via Gemini │
-   │ → Generate concise   │
-   │   summary text       │
-   └──────────┬───────────┘
-              │
-   ┌──────────▼───────────┐
-   │ Save to Google Docs  │
-   │ → Create / Update    │
-   │   summary document   │
-   └──────────┬───────────┘
-              │
-   ┌──────────▼───────────┐
-   │ Return Google Doc    │
-   │ Link or Local Save   │
-   │ Confirmation         │
-   └──────────────────────┘
+            ┌───────────────────────┐
+            │   YouTube URL Input   │
+            └──────────┬────────────┘
+                       │
+           ┌───────────▼────────────┐
+           │ Transcript Fetcher     │
+           │ (YouTube / yt-dlp)     │
+           └───────────┬────────────┘
+                       │
+           ┌───────────▼────────────┐
+           │ Gemini AI Summarizer   │
+           │ (Text → Summary)       │
+           └───────────┬────────────┘
+                       │
+           ┌───────────▼────────────┐
+           │ Google Docs Integration│
+           │ (Create / Update Doc)  │
+           └───────────┬────────────┘
+                       │
+           ┌───────────▼────────────┐
+           │ Return Doc Link /      │
+           │ Save Local Copy        │
+           └────────────────────────┘
+
 
 
 ---
@@ -250,4 +247,5 @@ Summary:
        ┌───────────────▼───────────────┐
        │ Return Google Doc Link / Save │
        │ Local Copy Confirmation       │
+
 
