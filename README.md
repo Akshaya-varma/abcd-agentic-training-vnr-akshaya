@@ -229,27 +229,27 @@ Summary:
  •Smart topic tagging (auto keywords from Gemini)
  •Voice summary output (Text-to-Speech)
 
-## Process Flow (Detailed)
-+------------------------------+
-| User inputs YouTube URL      |
-+--------------+---------------+
-               |
-               v
-+------------------------------+
-| Extract Transcript (yt-dlp)  |
-+------------------------------+
-               |
-               v
-+------------------------------+
-| Summarize via Gemini Model   |
-+------------------------------+
-               |
-               v
-+------------------------------+
-| Save to Google Docs API      |
-+------------------------------+
-               |
-               v
-+------------------------------+
-| Return Doc Link / Local Save |
-+------------------------------+
+## **Process Flow (Detailed)**
+
+         ┌──────────────────────────┐
+         │  User Inputs YouTube URL  │
+         └─────────────┬─────────────┘
+                       │
+       ┌───────────────▼───────────────┐
+       │  Extract Transcript (yt-dlp)  │
+       │  → Fetch captions/subtitles   │
+       └───────────────┬───────────────┘
+                       │
+       ┌───────────────▼───────────────┐
+       │  Summarize via Gemini Model   │
+       │  → Generate concise summary   │
+       └───────────────┬───────────────┘
+                       │
+       ┌───────────────▼───────────────┐
+       │  Save to Google Docs API      │
+       │  → Create & write summary     │
+       └───────────────┬───────────────┘
+                       │
+       ┌───────────────▼───────────────┐
+       │ Return Google Doc Link / Save │
+       │ Local Copy Confirmation       │
