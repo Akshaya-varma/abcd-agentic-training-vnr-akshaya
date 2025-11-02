@@ -1,175 +1,88 @@
-from dotenv import load_dotenv
-import gradio as gr
-import re
 import os
-import subprocess
 import json
-from youtube_transcript_api import YouTubeTranscriptApi
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
-import google.generativeai as genai
+import gradio as gr
+from summarizer import fetch_transcript, summarize_transcript
+from google_docs import append_summary_to_gdoc
+from tenacity import retry, stop_after_attempt, wait_exponential
+import logging
 
-# -------------------
-#  API SETUP
-# -------------------
-load_dotenv()  # Load .env file
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-#  Gemini API
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# === CONFIGURATION ===
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+DOC_ID = os.environ.get("DOC_ID", "1yCYZm6GfyN7m83zPLJqTzUL-6M0VtUAKG_UW2hCL2Ls")
+IMPERSONATE_USER = os.environ.get("IMPERSONATE_USER")  # optional
 
-#  Google Docs & Drive
-GOOGLE_CREDS_PATH = "service_key.json"  # downloaded from Google Cloud Console
-if os.path.exists(GOOGLE_CREDS_PATH):
-    creds = service_account.Credentials.from_service_account_file(
-        GOOGLE_CREDS_PATH,
-        scopes=[
-            "https://www.googleapis.com/auth/documents",
-            "https://www.googleapis.com/auth/drive",
-        ],
-    )
-    service = build("docs", "v1", credentials=creds)
-    drive_service = build("drive", "v3", credentials=creds)
+# === HANDLE SERVICE ACCOUNT JSON ===
+SERVICE_ACCOUNT_JSON = os.environ.get("SERVICE_ACCOUNT_JSON")  # store JSON as secret
+SERVICE_ACCOUNT_PATH = "/tmp/service_key.json"
+
+if SERVICE_ACCOUNT_JSON:
+    with open(SERVICE_ACCOUNT_PATH, "w", encoding="utf-8") as f:
+        f.write(SERVICE_ACCOUNT_JSON)
 else:
-    service = None
-    drive_service = None
+    raise RuntimeError("SERVICE_ACCOUNT_JSON secret not found — please add it in Hugging Face Space settings.")
 
+# === CORE LOGIC ===
+def validate_youtube_url(url: str):
+    return bool(url and ("youtube.com" in url or "youtu.be" in url))
 
-# -------------------
-#  EXTRACT VIDEO ID
-# -------------------
-def extract_video_id(url: str):
-    match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
-    return match.group(1) if match else url
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def safe_fetch_transcript(youtube_url: str):
+    return fetch_transcript(youtube_url)
 
-
-# -------------------
-#  GET TRANSCRIPT (robust)
-# -------------------
-def get_transcript_text(video_id: str) -> str:
-    """Fetch YouTube transcript using API or yt-dlp fallback."""
-    try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-        transcript = transcript_list.find_transcript(["en"])
-        fetched = transcript.fetch()
-        text = "\n".join([entry.get("text", "") for entry in fetched])
-        return text.strip()
-    except Exception as e:
-        print("YouTubeTranscriptAPI failed:", e)
-
-    # Fallback: yt-dlp
-    try:
-        cmd = [
-            "yt-dlp",
-            "--write-auto-sub",
-            "--sub-lang",
-            "en",
-            "--skip-download",
-            "--sub-format",
-            "json3",
-            "--output",
-            "%(id)s.%(ext)s",
-            f"https://www.youtube.com/watch?v={video_id}",
-        ]
-        subprocess.run(cmd, check=True)
-        sub_file = f"{video_id}.en.json3"
-
-        if os.path.exists(sub_file):
-            with open(sub_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            texts = []
-            for e in data.get("events", []):
-                if "segs" in e:
-                    texts.extend(seg.get("utf8", "") for seg in e["segs"] if "utf8" in seg)
-                elif "payload" in e:
-                    texts.extend(seg.get("text", "") for seg in e["payload"] if "text" in seg)
-
-            os.remove(sub_file)
-            return " ".join(texts).strip()
-        else:
-            raise FileNotFoundError("Subtitle JSON file not found.")
-    except Exception as e:
-        raise RuntimeError(f"Error fetching transcript via yt-dlp: {e}")
-
-    raise RuntimeError("No transcript available for this video.")
-
-
-# -------------------
-#  SUMMARIZE USING GEMINI
-# -------------------
-def summarize_text_with_gemini(text: str) -> str:
-    if not text.strip():
-        return "Transcript empty or unavailable."
-
-    model = genai.GenerativeModel(model_name="gemini-1.5-flash")
-
-    prompt = (
-        "Summarize the following YouTube transcript into clear, structured, and concise notes. "
-        "Use bullet points or sections if helpful:\n\n"
-        + text[:12000]  # Limit to token-safe range
-    )
+def run_pipeline(youtube_url: str, doc_title: str, create_doc: bool):
+    if not validate_youtube_url(youtube_url):
+        return "Invalid YouTube URL.", "", ""
 
     try:
-        response = model.generate_content(prompt)
-        return response.text.strip()
+        transcript = safe_fetch_transcript(youtube_url)
+        if not transcript.strip():
+            return "Transcript could not be fetched.", "", ""
     except Exception as e:
-        return f"Gemini error: {e}"
-
-
-# -------------------
-#  SAVE TO GOOGLE DOCS
-# -------------------
-def save_to_google_doc(title: str, summary: str) -> str:
-    if not service or not drive_service:
-        return "⚠️ Google API credentials missing (credentials.json not found)."
+        logger.exception("Transcript fetch failed")
+        return f"Transcript fetch failed: {e}", "", ""
 
     try:
-        doc = service.documents().create(body={"title": title}).execute()
-        doc_id = doc["documentId"]
-
-        service.documents().batchUpdate(
-            documentId=doc_id,
-            body={"requests": [{"insertText": {"location": {"index": 1}, "text": summary}}]},
-        ).execute()
-
-        drive_service.permissions().create(
-            fileId=doc_id, body={"role": "reader", "type": "anyone"}
-        ).execute()
-
-        return f"https://docs.google.com/document/d/{doc_id}/edit"
+        summary = summarize_transcript(transcript, model=GEMINI_MODEL)
     except Exception as e:
-        return f"Google Docs error: {e}"
+        logger.exception("Summarization failed")
+        return f"Summarization failed: {e}", "", ""
+
+    doc_url = ""
+    if create_doc:
+        try:
+            doc_url = append_summary_to_gdoc(
+                summary,
+                DOC_ID,
+                service_account_path=SERVICE_ACCOUNT_PATH,
+                impersonate_user=IMPERSONATE_USER,
+            )
+        except Exception as e:
+            logger.exception("Google Docs write failed")
+            return f"Summary created but failed to write Google Doc: {e}", summary, ""
+
+    return "Success ", summary, doc_url
 
 
-# -------------------
-#  MAIN PROCESS
-# -------------------
-def process_video(url, doc_title):
-    try:
-        video_id = extract_video_id(url)
-        transcript_text = get_transcript_text(video_id)
-    except Exception as e:
-        return f"Transcript error: {e}", "", ""
+# === GRADIO UI ===
+with gr.Blocks() as demo:
+    gr.Markdown("#  YouTube → Gemini Summarizer + Google Docs ")
 
-    summary = summarize_text_with_gemini(transcript_text)
-    link = save_to_google_doc(doc_title or "YouTube Summary", summary)
-    return "✅ Successfully summarized and saved to Google Docs!", summary, link
+    with gr.Row():
+        url_input = gr.Textbox(label="YouTube URL", placeholder="https://www.youtube.com/watch?v=...")
+    doc_title = gr.Textbox(label="Google Doc Title (for section heading)", value="YouTube Summary")
+    create_doc = gr.Checkbox(label="Append to Google Doc?", value=True)
+    run_btn = gr.Button("Summarize")
+    status = gr.Textbox(label="Status", interactive=False)
+    summary_out = gr.Textbox(label="Summary (preview)", lines=10)
+    gdoc_link = gr.Textbox(label="Google Doc URL (if added)", interactive=False)
 
+    def on_click(youtube_url, doc_title, create_doc):
+        return run_pipeline(youtube_url, doc_title, create_doc)
 
-# -------------------
-#  GRADIO UI
-# -------------------
-with gr.Blocks(title="YouTube → Gemini Summarizer → Google Docs") as app:
-    gr.Markdown("## YouTube Summarizer powered by Gemini & Google Docs")
+    run_btn.click(fn=on_click, inputs=[url_input, doc_title, create_doc], outputs=[status, summary_out, gdoc_link])
 
-    url_input = gr.Textbox(label="YouTube URL or Video ID")
-    title_input = gr.Textbox(label="Google Doc Title (optional)")
-    run_btn = gr.Button("Summarize & Save to Google Docs")
-
-    status = gr.Textbox(label="Status")
-    summary_out = gr.Textbox(label="Final Summary", lines=10)
-    doc_link = gr.Textbox(label="Google Doc Link (Public)")
-
-    run_btn.click(fn=process_video, inputs=[url_input, title_input], outputs=[status, summary_out, doc_link])
-
-app.launch()
+if __name__ == "__main__":
+    demo.launch(share=True)
