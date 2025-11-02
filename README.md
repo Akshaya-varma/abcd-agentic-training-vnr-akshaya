@@ -1,6 +1,6 @@
 # YouTube Summarizer + Google Docs Agent
 
-> Automatically fetch, summarize, and store YouTube video transcripts — powered by AI and Google Workspace.
+> Transform long YouTube videos into concise AI summaries — automatically saved to Google Docs.  
 
 ---
 
@@ -12,8 +12,8 @@ It integrates transcript extraction, AI summarization, and Google Docs automatio
 
 ### Core Features
 -  AI-powered video summarization (Google Gemini)
--  Auto transcript fetching from YouTube
--  Google Docs creation and update
+-  Automatic transcript fetching from YouTube
+-  Google Docs updation
 -  Optional local summary storage
 -  Error fallback with yt-dlp
 
@@ -37,7 +37,7 @@ It integrates transcript extraction, AI summarization, and Google Docs automatio
                        │
            ┌───────────▼────────────┐
            │ Google Docs Integration│
-           │ (Create / Update Doc)  │
+           │ (Update Doc)           │
            └───────────┬────────────┘
                        │
            ┌───────────▼────────────┐
@@ -71,11 +71,11 @@ Extract Video ID
 ↓
 Fetch Transcript (YouTube / yt-dlp)
 ↓
-Send to Gemini AI → Generate Summary
+Summarize using Gemini AI
 ↓
-Create / Update Google Doc
+Update Google Doc
 ↓
-Return Document Link ✅
+Return Document Link 
 
 
 
@@ -125,7 +125,7 @@ If still fails → show error:
    - Supports fallback and multilingual captions.
 
 2. **Google Gemini AI**
-   - Model: `gemini-2.0-flash`
+   - Model: `gemini-2.5-flash`
    - Summarizes transcripts into structured notes.
 
 3. **Google Docs API**
@@ -159,32 +159,6 @@ If still fails → show error:
 
 ---
 
-##  Application Architecture Diagram
-
-             ┌───────────────────────┐
-             │   YouTube URL Input   │
-             └──────────┬────────────┘
-                        │
-          ┌─────────────▼──────────────┐
-          │ Transcript Fetcher Layer   │
-          │ (YouTube / yt-dlp)         │
-          └─────────────┬──────────────┘
-                        │
-          ┌─────────────▼──────────────┐
-          │ Gemini AI Summarizer       │
-          │ (Text → Summary)           │
-          └─────────────┬──────────────┘
-                        │
-          ┌─────────────▼──────────────┐
-          │ Google Docs Integration    │
-          │ (Create / Update Document) │
-          └─────────────┬──────────────┘
-                        │
-          ┌─────────────▼──────────────┐
-          │ Return Doc Link / Save Local│
-          └────────────────────────────┘
-
----
 
 ##  Execution Steps
 
@@ -194,7 +168,7 @@ If still fails → show error:
 
 GOOGLE_API_KEY=<your_gemini_api_key>
 GOOGLE_DOCS_TOKEN=<your_oauth_token>
-YOUTUBE_API_KEY=<optional>
+
 3. **Run the application**
 
 python app.py
@@ -216,12 +190,7 @@ Summary:
 • Tech leaders emphasize responsible innovation.  
 • OpenAI and Google promote transparency and alignment.  
 • Collaboration is key for the next phase of AI development.
-## Future Enhancements
- •Chrome extension for instant summarization
- •Notion / Slack integrations
- •Playlist batch summarization
- •Smart topic tagging (auto keywords from Gemini)
- •Voice summary output (Text-to-Speech)
+
 
 ## **Process Flow (Detailed)**
 
@@ -247,5 +216,15 @@ Summary:
        ┌───────────────▼───────────────┐
        │ Return Google Doc Link / Save │
        │ Local Copy Confirmation       │
+         
+
+
+## Future Enhancements
+ - Chrome extension for instant summarization.
+ - Notion / Slack integrations.
+ - Playlist batch summarization.
+ - Smart topic tagging (auto keywords from Gemini).
+ - Voice summary output (Text-to-Speech).
+
 
 
